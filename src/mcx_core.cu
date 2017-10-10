@@ -512,6 +512,35 @@ __device__ inline int launchnewphoton(MCXpos *p,MCXdir *v,MCXtime *f,float3* rv,
                       *Lmove=(gcfg->srctype==MCX_SRC_SLIT)?-1.f:0.f;
 		      break;
 		}
+		case(MCX_SRC_INTERNAL): {
+		      float rx = rand_uniform01(t);
+		      float ry = rand_uniform01(t);
+		      float rz = rand_uniform01(t);
+			  // direction is isotropic
+			  float vx = rand_uniform01(t);
+			  float vy = rand_uniform01(t);
+			  float vz = rand_uniform01(t);
+              v->x = vx - 0.5;
+              v->y = vy - 0.5;
+              v->z = vz - 0.5;
+              *((float4*)p) = float4(p->x + rx * gcfg->srcparam1.x,
+                      p->y + ry * gcfg->srcparam1.y,
+                      p->z + rz * gcfg->srcparam1.z,
+                      p->w);
+			  p->w = srcpattern[
+                  (int)(rx * JUST_BELOW_ONE * gcfg->srcparam1.x) +
+                  (int)(ry * JUST_BELOW_ONE * gcfg->srcparam1.y) * (int)(gcfg->srcparam1.x) +
+                  (int)(rz * JUST_BELOW_ONE * gcfg->srcparam1.z) * (int)(gcfg->srcparam1.y) * (int)(gcfg->srcparam1.x)
+                  ];
+		      *idx1d=(int(floorf(p->z))*gcfg->dimlen.y+int(floorf(p->y))*gcfg->dimlen.x+int(floorf(p->x)));
+		      if(p->x<0.f || p->y<0.f || p->z<0.f || p->x>=gcfg->maxidx.x || p->y>=gcfg->maxidx.y || p->z>=gcfg->maxidx.z){
+                  *mediaid=0;
+		      }else{
+                  *mediaid=media[*idx1d];
+		      }
+              *Lmove=0.f;
+              break;
+        }
 	  }
 
           if(*Lmove<0.f && gcfg->c0.w!=0.f){ // if beam focus is set, determine the incident angle
@@ -1305,6 +1334,11 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
 
      if(cfg->srctype==MCX_SRC_PATTERN)
          CUDA_ASSERT(cudaMalloc((void **) &gsrcpattern, sizeof(float)*(int)(cfg->srcparam1.w*cfg->srcparam2.w)));
+     else if(cfg->srctype==MCX_SRC_INTERNAL){
+         CUDA_ASSERT(cudaMalloc((void **) &gsrcpattern,
+					 sizeof(float)*(int)(cfg->srcparam1.x * cfg->srcparam1.y *
+						 cfg->srcparam1.z)));
+     }
 
 #ifndef SAVE_DETECTORS
 #pragma omp master
@@ -1376,8 +1410,9 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
 
      CUDA_ASSERT(cudaMemcpy(gmedia, media, sizeof(uint)*dimxyz, cudaMemcpyHostToDevice));
      CUDA_ASSERT(cudaMemcpy(genergy,energy,sizeof(float) *(gpu[gpuid].autothread<<1), cudaMemcpyHostToDevice));
-     if(cfg->srcpattern)
+     if(cfg->srcpattern) {
          CUDA_ASSERT(cudaMemcpy(gsrcpattern,cfg->srcpattern,sizeof(float)*(int)(cfg->srcparam1.w*cfg->srcparam2.w), cudaMemcpyHostToDevice));
+     }
 
      CUDA_ASSERT(cudaMemcpyToSymbol(gproperty, cfg->prop,  cfg->medianum*sizeof(Medium), 0, cudaMemcpyHostToDevice));
      CUDA_ASSERT(cudaMemcpyToSymbol(gproperty, cfg->detpos,  cfg->detnum*sizeof(float4), cfg->medianum*sizeof(Medium), cudaMemcpyHostToDevice));
@@ -1466,6 +1501,7 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
 		case(MCX_SRC_LINE): mcx_main_loop<MCX_SRC_LINE> <<<mcgrid,mcblock,sharedbuf>>>(gmedia,gfield,genergy,gPseed,gPpos,gPdir,gPlen,gPdet,gdetected,gsrcpattern,greplayw,greplaytof,gseeddata,gdebugdata,gprogress); break;
 		case(MCX_SRC_SLIT): mcx_main_loop<MCX_SRC_SLIT> <<<mcgrid,mcblock,sharedbuf>>>(gmedia,gfield,genergy,gPseed,gPpos,gPdir,gPlen,gPdet,gdetected,gsrcpattern,greplayw,greplaytof,gseeddata,gdebugdata,gprogress); break;
 		case(MCX_SRC_PENCILARRAY): mcx_main_loop<MCX_SRC_PENCILARRAY> <<<mcgrid,mcblock,sharedbuf>>>(gmedia,gfield,genergy,gPseed,gPpos,gPdir,gPlen,gPdet,gdetected,gsrcpattern,greplayw,greplaytof,gseeddata,gdebugdata,gprogress); break;
+		case(MCX_SRC_INTERNAL): mcx_main_loop<MCX_SRC_INTERNAL> <<<mcgrid,mcblock,sharedbuf>>>(gmedia,gfield,genergy,gPseed,gPpos,gPdir,gPlen,gPdet,gdetected,gsrcpattern,greplayw,greplaytof,gseeddata,gdebugdata,gprogress); break;
 	   }
 
 #pragma omp master

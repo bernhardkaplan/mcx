@@ -59,5 +59,12 @@
 #define MCX_SRC_LINE       12 /**<  a non-directional line source */
 #define MCX_SRC_SLIT       13 /**<  a collimated line source */
 #define MCX_SRC_PENCILARRAY 14 /**<  a rectangular array of pencil beams */
+#define MCX_SRC_INTERNAL   15 /**< source is distributed inside the volume,
+							  if internal type is used, srcparam{1}.{x,y,z}
+							  must be equal to the dimensions of the simulated volume V
+							  and a file name given in the json file in
+							  Optode.Source.SourceFile
+							  The source file must be 32-bit float binary
+							  format having the same dimensions as V */
 
 #endif

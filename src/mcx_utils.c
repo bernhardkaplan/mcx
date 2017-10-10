@@ -76,7 +76,7 @@ const char debugflag[]={'R','M','P','\0'};
 const char *outputformat[]={"mc2","nii","hdr","ubj",""};
 const char *srctypeid[]={"pencil","isotropic","cone","gaussian","planar",
     "pattern","fourier","arcsine","disk","fourierx","fourierx2d","zgaussian",
-    "line","slit","pencilarray",""};
+    "line","slit","pencilarray","internal",""};
 
 void mcx_initcfg(Config *cfg){
      cfg->medianum=0;
@@ -709,10 +709,56 @@ void mcx_loadconfig(FILE *in, Config *cfg){
         return;
 }
 
+void mcx_loadsource(char *filename, Config *cfg){
+	/* Load the file storing the internal source distribution in binary format.
+	 * Photons are launched with a weight according to the file content.
+	 */
+	unsigned int datalen, res;
+	FILE *fp;
+	fp=fopen(filename, "rb");
+	if(fp == NULL){
+		mcx_error(-11,"the given binary source distribution file does not exist",__FILE__,__LINE__);
+	}
+	unsigned int file_size;
+	if(cfg->srcpattern){
+		free(cfg->srcpattern);
+		cfg->srcpattern=NULL;
+	}
+	datalen = cfg->dim.x * cfg->dim.y * cfg->dim.z;
+	cfg->srcpattern = (float*)malloc(sizeof(float) * datalen);
+	res = fread(cfg->srcpattern, sizeof(float), datalen, fp);
+	// set file point to end of stream and check that position = dimensionality
+	// given in json config
+	fseek(fp, 0 , SEEK_END);
+	file_size = ftell(fp);
+	fclose(fp);
+	// check that parameters in json file are correct and in line with filesize
+	if (file_size != sizeof(float) * res){
+		mcx_error(-11, "Values of Domain.Dim specified in .json file do not match the size of the file containing the source distribution (expecting float)", __FILE__, __LINE__);
+	}
+	if(res != datalen){
+		mcx_error(-11, "Size of the file containing the source distribution does not match specified dimensions", __FILE__, __LINE__);
+	}
+	if (cfg->srcparam1.x != cfg->dim.x){
+		mcx_error(-11, "The x-dimension of the given Domain must be identical to the Source.Param1.x value. Check Domain.Dim[0] and Source.Param1.x", __FILE__, __LINE__);
+	}
+	if (cfg->srcparam1.y != cfg->dim.y){
+		mcx_error(-11, "The y-dimension of the given Domain must be identical to the Source.Param1.y value. Check Domain.Dim[1] and Source.Param1.y", __FILE__, __LINE__);
+	}
+	if (cfg->srcparam1.z != cfg->dim.z){
+		mcx_error(-11, "The z-dimension of the given Domain must be identical to the Source.Param1.z value. Check Domain.Dim[2] and Source.Param1.z", __FILE__, __LINE__);
+	}
+	if (cfg->srcparam1.w * cfg->srcparam2.w != res){
+		mcx_error(-11, "The product of the 4th component of Source.Param1 and Source.Param2 must be equal to the number of voxels in the simulated volume. ", __FILE__, __LINE__);
+	}
+}
+
+
 int mcx_loadjson(cJSON *root, Config *cfg){
      int i;
      cJSON *Domain, *Optode, *Forward, *Session, *Shapes, *tmp, *subitem;
      char filename[MAX_PATH_LENGTH]={'\0'};
+     char sourcefilename[MAX_PATH_LENGTH]={'\0'};
      Domain  = cJSON_GetObjectItem(root,"Domain");
      Optode  = cJSON_GetObjectItem(root,"Optode");
      Session = cJSON_GetObjectItem(root,"Session");
@@ -890,6 +936,28 @@ int mcx_loadjson(cJSON *root, Config *cfg){
                  }
               }
            }
+		   // internal source requires loading an additional sourcefile
+			if (cfg->srctype == 15){ // source is distributed internal
+				char sourcefile[MAX_PATH_LENGTH];
+				cJSON *val;
+				val = FIND_JSON_OBJ("SourceFile", "Optode.Source.SourceFile",src);
+				if(val){
+					  strncpy(sourcefile, val->valuestring, MAX_PATH_LENGTH);
+					  if(cfg->rootpath[0]){
+#ifdef WIN32
+					   sprintf(sourcefilename,"%s\\%s", cfg->rootpath, sourcefile);
+#else
+					   sprintf(sourcefilename,"%s/%s", cfg->rootpath, sourcefile);
+#endif
+					  }else{
+					 strncpy(sourcefilename,sourcefile,MAX_PATH_LENGTH);
+				  }
+				}
+				else { // no SourceFile found -> raise error
+					MCX_ERROR(-1,"If source type is internal, a SourceFile must be defined in the json config file in the field Optode.Source.SourceFile");
+				}
+				mcx_loadsource(sourcefilename, cfg);
+			}
         }
         dets=FIND_JSON_OBJ("Detector","Optode.Detector",Optode);
         if(dets){
@@ -1726,3 +1794,4 @@ or (use inline domain definition)\n\
        %s -f input.json -P '{\"Shapes\":[{\"ZLayers\":[[1,10,1],[11,30,2],[31,60,3]]}]}'\n",
               exename,exename,exename,exename,exename);
 }
+
