@@ -25,10 +25,16 @@ dim = params['Domain']['Dim']
 
 # create internal source distribution
 internal_source = np.zeros(dim, dtype=np.float32)
-x0, x1 = int(3 * dim[0]/8), int(5 * dim[0]/8)
-y0, y1 = int(3 * dim[1]/8), int(5 * dim[1]/8)
+x0, x1 = int(2 * dim[0]/8), int(4 * dim[0]/8)
+y0, y1 = int(2 * dim[1]/8), int(4 * dim[1]/8)
+z0, z1 = int(3 * dim[2]/8), int(5 * dim[2]/8)
+internal_source[x0:x1, y0:y1, z0:z1] = .5
+
+x0, x1 = int(5 * dim[0]/8), int(7 * dim[0]/8)
+y0, y1 = int(5 * dim[1]/8), int(7 * dim[1]/8)
 z0, z1 = int(3 * dim[2]/8), int(5 * dim[2]/8)
 internal_source[x0:x1, y0:y1, z0:z1] = 1.
+
 output_fn = 'internal_source_60x60x60.bin'
 save_bin_column_major(internal_source, output_fn, verbose=True)
 
