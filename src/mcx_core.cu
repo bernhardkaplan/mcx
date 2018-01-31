@@ -516,13 +516,6 @@ __device__ inline int launchnewphoton(MCXpos *p,MCXdir *v,MCXtime *f,float3* rv,
 		      float rx = rand_uniform01(t);
 		      float ry = rand_uniform01(t);
 		      float rz = rand_uniform01(t);
-			  // direction is isotropic
-			  float vx = rand_uniform01(t);
-			  float vy = rand_uniform01(t);
-			  float vz = rand_uniform01(t);
-              v->x = vx - 0.5;
-              v->y = vy - 0.5;
-              v->z = vz - 0.5;
               *((float4*)p) = float4(p->x + rx * gcfg->srcparam1.x,
                       p->y + ry * gcfg->srcparam1.y,
                       p->z + rz * gcfg->srcparam1.z,
